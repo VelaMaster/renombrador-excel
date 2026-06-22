@@ -1,0 +1,8 @@
+target/
+dist/
+*.jar
+!**/src/**/*.jar
+.DS_Store
+.idea/
+*.iml
+.vscode/

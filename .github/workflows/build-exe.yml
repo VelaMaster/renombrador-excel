@@ -1,0 +1,66 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:   # permite lanzarlo a mano desde la pestaña "Actions"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin, incluye jpackage)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Compilar fat JAR
+        run: mvn -B -q clean package
+
+      - name: Preparar carpeta para jpackage
+        shell: cmd
+        run: |
+          if exist dist rmdir /S /Q dist
+          mkdir dist\input
+          copy /Y target\renombrador-excel.jar dist\input\
+
+      - name: Generar .exe (app-image portable)
+        shell: cmd
+        run: |
+          jpackage ^
+            --type app-image ^
+            --name RenombradorExcel ^
+            --input dist\input ^
+            --main-jar renombrador-excel.jar ^
+            --main-class com.renombrador.Main ^
+            --dest dist ^
+            --win-console
+
+      - name: Empaquetar ZIP del .exe + runtime
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\RenombradorExcel\* -DestinationPath RenombradorExcel-windows.zip
+
+      - name: Subir artefactos al run (descargables desde "Actions")
+        uses: actions/upload-artifact@v4
+        with:
+          name: RenombradorExcel-windows
+          path: |
+            RenombradorExcel-windows.zip
+            target/renombrador-excel.jar
+
+      # Si pusheas un tag tipo v1.0.0, se publica un Release automáticamente
+      - name: Crear Release en tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            RenombradorExcel-windows.zip
+            target/renombrador-excel.jar
