@@ -55,6 +55,22 @@ renombrador excel/
 
 ## Patrón aceptado
 
-Regex usada: `^[^_]+_PE\s+(\d+)_(\d+)` (case-insensitive). Cualquier cosa antes
-del primer `_` se ignora, así que sirve para `210_…`, `ABC_…`, etc.
+Regex usada: `^[^_]+_[^_]+_(\d+)` (case-insensitive). Solo importa el número
+que va **después del segundo `_`** (el "segundo sufijo"). Todo lo demás
+(prefijo, "PE 1", "PE 15", etc.) se ignora.
+
+Ejemplos:
+
+| nombre archivo         | se captura |
+|------------------------|-----------:|
+| `210_PE 1_47000.pdf`   |     47000  |
+| `210_PE 15_73.pdf`     |        73  |
+| `ABC_xx_999 (v2).pdf`  |       999  |
+
+Excel resultante (una columna por archivo, en orden alfabético del nombre):
+
+```
+fila 1:  1     2     3     ...   (contador de columna)
+fila 2:  47000 73    999   ...   (segundo sufijo del archivo)
+```
 # renombrador-excel

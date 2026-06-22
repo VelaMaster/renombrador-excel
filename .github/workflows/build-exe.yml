@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-  workflow_dispatch:   # permite lanzarlo a mano desde la pestaña "Actions"
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -31,7 +31,8 @@ jobs:
           mkdir dist\input
           copy /Y target\renombrador-excel.jar dist\input\
 
-      - name: Generar .exe (app-image portable)
+      # 1) Versión portable (carpeta + .exe + runtime). Se debe usar la CARPETA completa.
+      - name: Generar app-image portable
         shell: cmd
         run: |
           jpackage ^
@@ -40,27 +41,56 @@ jobs:
             --input dist\input ^
             --main-jar renombrador-excel.jar ^
             --main-class com.renombrador.Main ^
-            --dest dist ^
-            --win-console
+            --dest dist\portable ^
+            --app-version 1.0.0
 
-      - name: Empaquetar ZIP del .exe + runtime
+      - name: Empaquetar portable en ZIP
         shell: pwsh
         run: |
-          Compress-Archive -Path dist\RenombradorExcel\* -DestinationPath RenombradorExcel-windows.zip
+          Compress-Archive -Path dist\portable\RenombradorExcel\* -DestinationPath RenombradorExcel-portable.zip
 
-      - name: Subir artefactos al run (descargables desde "Actions")
+      # 2) Instalador .exe real (con WiX). Esto es lo que el usuario final debe correr.
+      - name: Instalar WiX Toolset 3 (necesario para --type exe)
+        shell: pwsh
+        run: |
+          choco install wixtoolset --no-progress -y
+          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Generar instalador .exe
+        shell: cmd
+        run: |
+          jpackage ^
+            --type exe ^
+            --name RenombradorExcel ^
+            --input dist\input ^
+            --main-jar renombrador-excel.jar ^
+            --main-class com.renombrador.Main ^
+            --dest dist\installer ^
+            --app-version 1.0.0 ^
+            --win-dir-chooser ^
+            --win-menu ^
+            --win-shortcut
+
+      - name: Renombrar instalador
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist\installer\*.exe | Select-Object -First 1
+          Copy-Item $exe.FullName RenombradorExcel-installer.exe
+
+      - name: Subir artefactos
         uses: actions/upload-artifact@v4
         with:
           name: RenombradorExcel-windows
           path: |
-            RenombradorExcel-windows.zip
+            RenombradorExcel-installer.exe
+            RenombradorExcel-portable.zip
             target/renombrador-excel.jar
 
-      # Si pusheas un tag tipo v1.0.0, se publica un Release automáticamente
       - name: Crear Release en tags
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            RenombradorExcel-windows.zip
+            RenombradorExcel-installer.exe
+            RenombradorExcel-portable.zip
             target/renombrador-excel.jar

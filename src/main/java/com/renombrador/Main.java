@@ -21,17 +21,22 @@ import java.util.regex.Pattern;
 /**
  * Renombrador a Excel:
  * Escanea PDFs en una carpeta cuyo nombre coincide con
- *    <prefijo>_PE <N>_<NNNNN>...
- * Extrae N (renglon 1) y NNNNN (renglon 2) y los escribe en columnas
- * consecutivas dentro de un archivo .xlsx.
+ *    <prefijo>_PE <algo>_<NNNNN>...
+ * Lo que importa es el SEGUNDO sufijo (el numero despues del segundo "_").
+ * Renglon 1: contador secuencial 1, 2, 3, ...
+ * Renglon 2: el segundo sufijo extraido del nombre.
+ *
+ * Ejemplos:
+ *    210_PE 1_47000.pdf   -> col1: 1   /   row1=1, row2=47000
+ *    210_PE 15_73.pdf     -> col2: 2   /   row1=2, row2=73
  */
 public class Main {
 
-    // Acepta cualquier prefijo (digitos, letras o mezcla), seguido de "_PE ",
-    // luego el numero "N", luego "_", luego el numero "NNNNN".
-    // Ejemplo que matchea: "210_PE 1_47800.pdf", "ABC_PE 12_89000 (copia).pdf"
+    // Solo nos interesa el numero despues del SEGUNDO "_".
+    // Captura cualquier numero al final de la zona "_NNNNN".
+    // Acepta espacios, letras, cualquier cosa antes del segundo "_".
     private static final Pattern PATRON =
-            Pattern.compile("^[^_]+_PE\\s+(\\d+)_(\\d+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("^[^_]+_[^_]+_(\\d+)", Pattern.CASE_INSENSITIVE);
 
     public static void main(String[] args) {
         try {
@@ -57,8 +62,7 @@ public class Main {
         }
         Arrays.sort(archivos, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
 
-        List<String> renglon1 = new ArrayList<>();
-        List<String> renglon2 = new ArrayList<>();
+        List<String> segundosSufijos = new ArrayList<>();
         List<String> ignorados = new ArrayList<>();
 
         for (File f : archivos) {
@@ -67,14 +71,13 @@ public class Main {
             String base = nombre.substring(0, nombre.length() - 4);
             Matcher m = PATRON.matcher(base);
             if (m.find()) {
-                renglon1.add(m.group(1));
-                renglon2.add(m.group(2));
+                segundosSufijos.add(m.group(1));
             } else {
                 ignorados.add(nombre);
             }
         }
 
-        if (renglon1.isEmpty()) {
+        if (segundosSufijos.isEmpty()) {
             JOptionPane.showMessageDialog(null,
                     "Ningun PDF coincide con el patron 'XXX_PE N_NNNNN'.",
                     "Sin coincidencias", JOptionPane.WARNING_MESSAGE);
@@ -99,21 +102,16 @@ public class Main {
              FileOutputStream out = new FileOutputStream(destino)) {
 
             Sheet hoja = wb.createSheet("Datos");
-            Row r1 = hoja.createRow(0);
-            Row r2 = hoja.createRow(1);
+            Row r1 = hoja.createRow(0); // contador 1, 2, 3, ...
+            Row r2 = hoja.createRow(1); // segundo sufijo
 
-            for (int i = 0; i < renglon1.size(); i++) {
-                Cell c1 = r1.createCell(i);
+            for (int i = 0; i < segundosSufijos.size(); i++) {
+                r1.createCell(i).setCellValue(i + 1);
                 Cell c2 = r2.createCell(i);
                 try {
-                    c1.setCellValue(Double.parseDouble(renglon1.get(i)));
+                    c2.setCellValue(Double.parseDouble(segundosSufijos.get(i)));
                 } catch (NumberFormatException e) {
-                    c1.setCellValue(renglon1.get(i));
-                }
-                try {
-                    c2.setCellValue(Double.parseDouble(renglon2.get(i)));
-                } catch (NumberFormatException e) {
-                    c2.setCellValue(renglon2.get(i));
+                    c2.setCellValue(segundosSufijos.get(i));
                 }
             }
             wb.write(out);
@@ -127,7 +125,7 @@ public class Main {
         // 5) Reporte final
         StringBuilder msg = new StringBuilder();
         msg.append("Excel generado: ").append(destino.getAbsolutePath()).append('\n');
-        msg.append("PDFs procesados: ").append(renglon1.size()).append('\n');
+        msg.append("PDFs procesados: ").append(segundosSufijos.size()).append('\n');
         if (!ignorados.isEmpty()) {
             msg.append("Ignorados (no cumplen el patron): ").append(ignorados.size()).append('\n');
             int n = Math.min(5, ignorados.size());
